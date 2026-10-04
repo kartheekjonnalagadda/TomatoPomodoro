@@ -135,7 +135,7 @@ private fun TomatoApp(onPickSound: () -> Unit, onExactAlarms: () -> Unit) {
         modifier = Modifier.fillMaxSize().background(bg).padding(horizontal = 22.dp, vertical = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Tomato 1.4", color = ink, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Text("Tomato 1.5", color = ink, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Text(
             if (snapshot.running) "Lid winding back" else "Twist the lid · 0 to 55",
             color = ink.copy(alpha = 0.7f),
@@ -227,7 +227,7 @@ private fun TomatoDial(
     val shown = if (running && totalMillis > 0L) {
         (remainingMillis / 60_000f).coerceIn(0f, 55f)
     } else minutes.toFloat()
-    val spin by animateFloatAsState(shown * 6f, tween(220), label = "lid")
+    val turn by animateFloatAsState(shown, tween(240), label = "twist")
     val pulse by rememberInfiniteTransition(label = "tick").animateFloat(
         initialValue = 0.45f,
         targetValue = 1f,
@@ -239,16 +239,8 @@ private fun TomatoDial(
             .size(320.dp)
             .pointerInput(running) {
                 if (running) return@pointerInput
-                detectDragGestures { change, drag ->
-                    change.consume()
-                    val center = Offset(size.width / 2f, size.height * 0.48f)
-                    val prev = change.position - drag
-                    val a1 = atan2(prev.y - center.y, prev.x - center.x)
-                    val a2 = atan2(change.position.y - center.y, change.position.x - center.x)
-                    var delta = Math.toDegrees((a2 - a1).toDouble()).toFloat()
-                    if (delta > 180f) delta -= 360f
-                    if (delta < -180f) delta += 360f
-                    val next = (minutes - delta / 6f).toInt().coerceIn(0, 55)
+                detectHorizontalDragGestures { _, drag ->
+                    val next = (lastSlot - (drag / 22f).toInt() * 5).coerceIn(0, 55)
                     val snapped = PomodoroEngine.steps.minBy { kotlin.math.abs(it - next) }
                     if (snapped != lastSlot) {
                         lastSlot = snapped
@@ -258,23 +250,23 @@ private fun TomatoDial(
             },
     ) {
         val cx = size.width / 2f
-        val baseTop = size.height * 0.52f
+        val seam = size.height * 0.50f
         val gap = 3.dp.toPx()
-        val rx = size.minDimension * 0.40f
-        val ry = size.minDimension * 0.30f
-        drawOval(Color(0x30000000), Offset(cx - rx * 0.7f, baseTop + ry * 1.08f), Size(rx * 1.4f, ry * 0.18f))
+        val rx = size.minDimension * 0.42f
+        val ry = size.minDimension * 0.34f
+        drawOval(Color(0x28000000), Offset(cx - rx * 0.72f, seam + ry * 0.95f), Size(rx * 1.44f, ry * 0.2f))
         val base = Path().apply {
-            moveTo(cx - rx, baseTop + 2f)
-            cubicTo(cx - rx * 1.02f, baseTop + ry * 0.7f, cx - rx * 0.55f, baseTop + ry * 1.16f, cx, baseTop + ry * 1.16f)
-            cubicTo(cx + rx * 0.55f, baseTop + ry * 1.16f, cx + rx * 1.02f, baseTop + ry * 0.7f, cx + rx, baseTop + 2f)
+            moveTo(cx - rx, seam + gap)
+            cubicTo(cx - rx, seam + ry * 0.72f, cx - rx * 0.55f, seam + ry * 1.12f, cx, seam + ry * 1.12f)
+            cubicTo(cx + rx * 0.55f, seam + ry * 1.12f, cx + rx, seam + ry * 0.72f, cx + rx, seam + gap)
             close()
         }
         drawPath(
             base,
             brush = Brush.radialGradient(
-                listOf(Color(0xFFE23B32), Color(0xFFC62828), Color(0xFF8E1612)),
-                center = Offset(cx - rx * 0.08f, baseTop + ry * 0.4f),
-                radius = rx * 1.35f,
+                listOf(Color(0xFFEF3B32), Color(0xFFD32F2F), Color(0xFF9B1B16)),
+                center = Offset(cx - rx * 0.12f, seam + ry * 0.35f),
+                radius = rx * 1.3f,
             ),
         )
         drawIntoCanvas { canvas ->
@@ -285,78 +277,69 @@ private fun TomatoDial(
                 typeface = android.graphics.Typeface.create(android.graphics.Typeface.SANS_SERIF, android.graphics.Typeface.BOLD)
             }
             (0..55 step 5).forEach { mark ->
-                val delta = ((mark - shown) % 60f + 60f) % 60f
+                val delta = ((mark - turn) % 60f + 60f) % 60f
                 val signed = if (delta > 30f) delta - 60f else delta
                 val angle = Math.toRadians((-signed * 6f).toDouble())
                 val front = cos(angle).toFloat()
-                if (front < 0.32f) return@forEach
-                val x = cx + (sin(angle) * rx * 0.56f).toFloat()
-                val near = kotlin.math.abs(signed) < 2.4f
+                if (front < 0.45f) return@forEach
+                val x = cx + (sin(angle) * rx * 0.62f).toFloat()
+                val near = kotlin.math.abs(signed) < 2.6f
                 drawLine(
-                    Color.White.copy(alpha = if (near && running) pulse else 0.7f + 0.3f * front),
-                    Offset(x, baseTop + 12f),
-                    Offset(x, baseTop + 26f),
-                    strokeWidth = if (near) 3.6f else 2.2f,
+                    Color.White.copy(alpha = if (near && running) pulse else 0.75f),
+                    Offset(x, seam + gap + 8f),
+                    Offset(x, seam + gap + 20f),
+                    strokeWidth = if (near) 3.2f else 2f,
                     cap = StrokeCap.Round,
                 )
-                paint.textSize = if (near) 32f else 24f
-                paint.alpha = (255 * front).toInt().coerceIn(160, 255)
-                canvas.nativeCanvas.drawText(mark.toString(), x, baseTop + 52f, paint)
+                paint.textSize = 26f
+                paint.alpha = 230
+                canvas.nativeCanvas.drawText(mark.toString(), x, seam + gap + 46f, paint)
             }
         }
-        val lidTop = baseTop - gap
-        val pivot = Offset(cx, lidTop - ry * 0.35f)
-        withTransform({ rotate(degrees = spin, pivot = pivot) }) {
-            val lid = Path().apply {
-                moveTo(cx - rx * 0.96f, lidTop)
-                cubicTo(cx - rx * 1.05f, lidTop - ry * 0.35f, cx - rx * 0.72f, lidTop - ry * 0.7f, cx - rx * 0.28f, lidTop - ry * 0.82f)
-                cubicTo(cx - rx * 0.08f, lidTop - ry * 0.98f, cx + rx * 0.18f, lidTop - ry * 0.9f, cx + rx * 0.42f, lidTop - ry * 0.7f)
-                cubicTo(cx + rx * 0.78f, lidTop - ry * 0.48f, cx + rx * 1.02f, lidTop - ry * 0.18f, cx + rx * 0.96f, lidTop)
-                close()
-            }
-            drawPath(
-                lid,
-                brush = Brush.radialGradient(
-                    listOf(Color(0xFFFF6E64), Color(0xFFE53935), Color(0xFFB71C1C)),
-                    center = Offset(cx - rx * 0.22f, lidTop - ry * 0.5f),
-                    radius = rx * 1.15f,
-                ),
-            )
-            drawOval(
-                brush = Brush.radialGradient(listOf(Color(0xD0FFFFFF), Color(0x00FFFFFF)), center = Offset(cx - rx * 0.3f, lidTop - ry * 0.55f), radius = rx * 0.28f),
-                topLeft = Offset(cx - rx * 0.5f, lidTop - ry * 0.74f),
-                size = Size(rx * 0.42f, ry * 0.28f),
-            )
-            drawOval(Color(0xFF4E342E), Offset(cx - 14f, lidTop - ry * 0.9f), Size(28f, 12f))
-            val stem = Path().apply {
-                moveTo(cx - 7f, lidTop - ry * 0.78f)
-                cubicTo(cx - 10f, lidTop - ry * 1.35f, cx + 2f, lidTop - ry * 1.7f, cx + 16f, lidTop - ry * 1.55f)
-                cubicTo(cx + 8f, lidTop - ry * 1.4f, cx + 10f, lidTop - ry * 1.1f, cx + 6f, lidTop - ry * 0.76f)
-                close()
-            }
-            drawPath(stem, Color(0xFF3E2723))
-            val leaf = Path().apply {
-                moveTo(cx + 4f, lidTop - ry * 0.95f)
-                quadraticTo(cx + 46f, lidTop - ry * 1.15f, cx + 36f, lidTop - ry * 0.7f)
-                quadraticTo(cx + 18f, lidTop - ry * 0.82f, cx + 4f, lidTop - ry * 0.9f)
-                close()
-            }
-            drawPath(leaf, Color(0xFF4C7C3A))
-            val leaf2 = Path().apply {
-                moveTo(cx - 2f, lidTop - ry * 0.92f)
-                quadraticTo(cx - 34f, lidTop - ry * 1.05f, cx - 22f, lidTop - ry * 0.68f)
-                quadraticTo(cx - 10f, lidTop - ry * 0.78f, cx - 2f, lidTop - ry * 0.88f)
-                close()
-            }
-            drawPath(leaf2, Color(0xFF3D6B32))
+        val lidBottom = seam - gap
+        val lid = Path().apply {
+            moveTo(cx - rx * 0.98f, lidBottom)
+            cubicTo(cx - rx, lidBottom - ry * 0.55f, cx - rx * 0.45f, lidBottom - ry * 0.92f, cx, lidBottom - ry * 0.9f)
+            cubicTo(cx + rx * 0.45f, lidBottom - ry * 0.92f, cx + rx, lidBottom - ry * 0.55f, cx + rx * 0.98f, lidBottom)
+            close()
         }
+        val shineX = cx + sin(Math.toRadians((-turn * 6f).toDouble())).toFloat() * rx * 0.12f
+        drawPath(
+            lid,
+            brush = Brush.radialGradient(
+                listOf(Color(0xFFFF6A60), Color(0xFFE53935), Color(0xFFC62828)),
+                center = Offset(shineX - rx * 0.18f, lidBottom - ry * 0.5f),
+                radius = rx * 1.15f,
+            ),
+        )
+        drawOval(
+            brush = Brush.radialGradient(listOf(Color(0xCCFFFFFF), Color(0x00FFFFFF)), center = Offset(shineX - rx * 0.22f, lidBottom - ry * 0.58f), radius = rx * 0.26f),
+            topLeft = Offset(shineX - rx * 0.42f, lidBottom - ry * 0.74f),
+            size = Size(rx * 0.38f, ry * 0.26f),
+        )
         val pointer = Path().apply {
-            moveTo(cx, lidTop + 1f)
-            lineTo(cx - 10f, lidTop - 16f)
-            lineTo(cx + 10f, lidTop - 16f)
+            moveTo(cx, lidBottom + 2f)
+            lineTo(cx - 9f, lidBottom - 14f)
+            lineTo(cx + 9f, lidBottom - 14f)
             close()
         }
         drawPath(pointer, if (running) Color.White.copy(alpha = 0.6f + 0.4f * pulse) else Color.White)
+        val stemLean = sin(Math.toRadians((turn * 6f).toDouble())).toFloat() * 10f
+        drawOval(Color(0xFF4E342E), Offset(cx - 12f + stemLean, lidBottom - ry * 0.96f), Size(24f, 10f))
+        val stem = Path().apply {
+            moveTo(cx - 6f + stemLean, lidBottom - ry * 0.9f)
+            cubicTo(cx - 4f + stemLean, lidBottom - ry * 1.35f, cx + 8f + stemLean, lidBottom - ry * 1.55f, cx + 14f + stemLean, lidBottom - ry * 1.42f)
+            cubicTo(cx + 6f + stemLean, lidBottom - ry * 1.28f, cx + 8f + stemLean, lidBottom - ry * 1.05f, cx + 5f + stemLean, lidBottom - ry * 0.88f)
+            close()
+        }
+        drawPath(stem, Color(0xFF3E2723))
+        val leaf = Path().apply {
+            moveTo(cx + 2f + stemLean, lidBottom - ry * 1.02f)
+            quadraticTo(cx + 34f + stemLean, lidBottom - ry * 1.18f, cx + 26f + stemLean, lidBottom - ry * 0.84f)
+            quadraticTo(cx + 12f + stemLean, lidBottom - ry * 0.92f, cx + 2f + stemLean, lidBottom - ry * 0.98f)
+            close()
+        }
+        drawPath(leaf, Color(0xFF4C7C3A))
     }
 }
 
