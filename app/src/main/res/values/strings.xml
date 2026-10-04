@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Tomato</string>
+    <string name="widget_name">Tomato timer</string>
+    <string name="widget_description">Start, pause, and set a 5 to 55 minute tomato from the home screen.</string>
+    <string name="channel_timer">Tomato timer</string>
+    <string name="channel_alarm">Tomato alarm</string>
+    <string name="notif_running">Tomato is running</string>
+    <string name="notif_done">Tomato finished</string>
+    <string name="pause">Pause</string>
+    <string name="resume">Resume</string>
+    <string name="stop">Stop</string>
+</resources>

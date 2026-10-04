@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="tomato">#E23B2F</color>
+    <color name="tomato_deep">#B71C1C</color>
+    <color name="leaf">#2E7D32</color>
+    <color name="cream">#FFF6F0</color>
+    <color name="ink">#2A120E</color>
+</resources>
