@@ -132,9 +132,9 @@ private fun TomatoApp(onPickSound: () -> Unit, onExactAlarms: () -> Unit) {
         modifier = Modifier.fillMaxSize().background(bg).padding(horizontal = 22.dp, vertical = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Tomato", color = ink, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Text("Tomato 1.2", color = ink, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Text(
-            if (snapshot.running) "Dial winding back to zero" else "Twist the apple · 5 to 55 minutes",
+            if (snapshot.running) "Winding back to zero" else "Swipe the band · 5 to 55",
             color = ink.copy(alpha = 0.7f),
             fontSize = 14.sp,
         )
@@ -254,92 +254,72 @@ private fun TomatoDial(
                 }
             },
     ) {
-        val c = Offset(size.width / 2f, size.height * 0.54f)
-        val rx = size.minDimension * 0.44f
-        val ry = size.minDimension * 0.34f
-        val seam = c.y - ry * 0.02f
-
-        drawOval(
-            Color(0x28000000),
-            Offset(c.x - rx * 0.72f, seam + ry * 1.05f),
-            Size(rx * 1.44f, ry * 0.28f),
-        )
-        drawOval(
+        val cx = size.width / 2f
+        val seam = size.height * 0.46f
+        val rx = size.minDimension * 0.42f
+        val ry = size.minDimension * 0.36f
+        drawOval(Color(0x22000000), Offset(cx - rx * 0.7f, seam + ry * 1.02f), Size(rx * 1.4f, ry * 0.22f))
+        val apple = Path().apply {
+            moveTo(cx - rx, seam)
+            cubicTo(cx - rx * 1.02f, seam + ry * 0.72f, cx - rx * 0.62f, seam + ry * 1.08f, cx, seam + ry * 1.08f)
+            cubicTo(cx + rx * 0.62f, seam + ry * 1.08f, cx + rx * 1.02f, seam + ry * 0.72f, cx + rx, seam)
+            cubicTo(cx + rx * 0.98f, seam - ry * 0.78f, cx + rx * 0.42f, seam - ry * 0.9f, cx, seam - ry * 0.86f)
+            cubicTo(cx - rx * 0.42f, seam - ry * 0.9f, cx - rx * 0.98f, seam - ry * 0.78f, cx - rx, seam)
+            close()
+        }
+        drawPath(
+            apple,
             brush = Brush.radialGradient(
-                listOf(Color(0xFFEF3B34), Color(0xFFD42722), Color(0xFFB01A16)),
-                center = Offset(c.x - rx * 0.12f, seam + ry * 0.35f),
-                radius = rx * 1.25f,
+                listOf(Color(0xFFFF5C54), Color(0xFFE53935), Color(0xFFC62828), Color(0xFF9B1B16)),
+                center = Offset(cx - rx * 0.2f, seam - ry * 0.2f),
+                radius = rx * 1.5f,
             ),
-            topLeft = Offset(c.x - rx, seam - ry * 0.02f),
-            size = Size(rx * 2f, ry * 1.18f),
         )
-
+        drawOval(
+            brush = Brush.radialGradient(listOf(Color(0xAAFFFFFF), Color(0x00FFFFFF)), center = Offset(cx - rx * 0.28f, seam - ry * 0.48f), radius = rx * 0.28f),
+            topLeft = Offset(cx - rx * 0.48f, seam - ry * 0.68f),
+            size = Size(rx * 0.42f, ry * 0.28f),
+        )
+        drawLine(Color(0x66FFFFFF), Offset(cx - rx * 0.72f, seam), Offset(cx + rx * 0.72f, seam), strokeWidth = 2.5f)
+        val pointer = Path().apply {
+            moveTo(cx, seam + 7f)
+            lineTo(cx - 10f, seam - 14f)
+            lineTo(cx + 10f, seam - 14f)
+            close()
+        }
+        drawPath(pointer, if (running) Color.White.copy(alpha = 0.55f + 0.45f * pulse) else Color.White)
         drawIntoCanvas { canvas ->
             val paint = Paint().apply {
                 isAntiAlias = true
                 color = android.graphics.Color.WHITE
                 textAlign = Paint.Align.CENTER
                 typeface = android.graphics.Typeface.create(android.graphics.Typeface.SANS_SERIF, android.graphics.Typeface.BOLD)
-                setShadowLayer(4f, 0f, 1f, android.graphics.Color.argb(90, 80, 0, 0))
             }
             (0..55 step 5).forEach { mark ->
                 val delta = ((mark - shown) % 60f + 60f) % 60f
                 val signed = if (delta > 30f) delta - 60f else delta
                 val angle = Math.toRadians((-signed * 6f).toDouble())
                 val front = cos(angle).toFloat()
-                if (front < 0.25f) return@forEach
-                val x = c.x + (sin(angle) * rx * 0.62f).toFloat()
-                val y = seam + ry * 0.22f
+                if (front < 0.35f) return@forEach
+                val x = cx + (sin(angle) * rx * 0.55f).toFloat()
                 val near = kotlin.math.abs(signed) < 2.2f
                 drawLine(
-                    color = Color.White.copy(alpha = if (near && running) pulse else 0.55f + 0.45f * front),
-                    start = Offset(x, seam + ry * 0.06f),
-                    end = Offset(x, seam + ry * 0.14f),
-                    strokeWidth = if (near) 3.4f else 2f,
+                    Color.White.copy(alpha = if (near && running) pulse else 0.7f + 0.3f * front),
+                    Offset(x, seam + 10f),
+                    Offset(x, seam + 22f),
+                    strokeWidth = if (near) 3.5f else 2f,
                     cap = StrokeCap.Round,
                 )
-                paint.textSize = if (near) 32f else 26f
-                paint.alpha = (255 * front).toInt().coerceIn(140, 255)
-                canvas.nativeCanvas.drawText(mark.toString(), x, y + 28f, paint)
+                paint.textSize = if (near) 30f else 24f
+                paint.alpha = (255 * front).toInt().coerceIn(160, 255)
+                canvas.nativeCanvas.drawText(mark.toString(), x, seam + 48f, paint)
             }
         }
-
-        drawOval(
-            brush = Brush.radialGradient(
-                listOf(Color(0xFFFF5A52), Color(0xFFE53935), Color(0xFFC62828)),
-                center = Offset(c.x - rx * 0.22f, seam - ry * 0.42f),
-                radius = rx * 1.15f,
-            ),
-            topLeft = Offset(c.x - rx * 0.96f, seam - ry * 0.92f),
-            size = Size(rx * 1.92f, ry * 0.98f),
-        )
-        drawOval(
-            brush = Brush.radialGradient(
-                listOf(Color(0xCCFFFFFF), Color(0x00FFFFFF)),
-                center = Offset(c.x - rx * 0.28f, seam - ry * 0.55f),
-                radius = rx * 0.32f,
-            ),
-            topLeft = Offset(c.x - rx * 0.52f, seam - ry * 0.78f),
-            size = Size(rx * 0.5f, ry * 0.32f),
-        )
-        drawLine(
-            Color(0x55FFFFFF),
-            Offset(c.x - rx * 0.78f, seam),
-            Offset(c.x + rx * 0.78f, seam),
-            strokeWidth = 2f,
-        )
-        val pointer = Path().apply {
-            moveTo(c.x, seam + 8f)
-            lineTo(c.x - 9f, seam - 12f)
-            lineTo(c.x + 9f, seam - 12f)
-            close()
-        }
-        drawPath(pointer, if (running) Color.White.copy(alpha = 0.6f + 0.4f * pulse) else Color.White)
-        drawOval(Color(0xFF2C2C2C), Offset(c.x - 8f, seam - ry * 0.98f), Size(16f, 8f))
+        drawOval(Color(0xFF241816), Offset(cx - 7f, seam - ry * 0.9f), Size(14f, 7f))
         val stem = Path().apply {
-            moveTo(c.x - 3f, seam - ry * 0.92f)
-            quadraticTo(c.x + 1f, seam - ry * 1.18f, c.x + 6f, seam - ry * 1.22f)
-            quadraticTo(c.x + 3f, seam - ry * 1.08f, c.x + 4f, seam - ry * 0.9f)
+            moveTo(cx - 3.5f, seam - ry * 0.84f)
+            quadraticTo(cx + 1f, seam - ry * 1.02f, cx + 5f, seam - ry * 1.05f)
+            quadraticTo(cx + 2f, seam - ry * 0.96f, cx + 3f, seam - ry * 0.82f)
             close()
         }
         drawPath(stem, Color(0xFF1A1A1A))
