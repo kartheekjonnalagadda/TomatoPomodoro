@@ -22,3 +22,10 @@ Android app for a 5–55 minute tomato timer. Sessions step by 5 minutes. The to
 6. Long-press the home screen, add the **Tomato timer** widget.
 
 Package: `com.tomatopomodoro.app`
+
+## Download page
+
+The web project is in `web/`. Open `web/index.html` and tap **Download APK**. The button saves `web/tomato-pomodoro.apk`.
+
+Published page: https://kartheekjonnalagadda.github.io/TomatoPomodoro/
+

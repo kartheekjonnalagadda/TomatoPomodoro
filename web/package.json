@@ -1,0 +1,7 @@
+{
+  "name": "tomato-pomodoro-web",
+  "private": true,
+  "scripts": {
+    "dev": "python3 -m http.server 4173"
+  }
+}
