@@ -52,9 +52,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
+import android.graphics.Paint
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -124,7 +126,7 @@ private fun TomatoApp(onPickSound: () -> Unit, onExactAlarms: () -> Unit) {
             if (!snapshot.running) break
         }
     }
-    val bg = if (snapshot.running) Color(0xFF2A0C0A) else Color(0xFFFFF6F0)
+    val bg = if (snapshot.running) Color(0xFF2A0C0A) else Color(0xFFF6F6F6)
     val ink = if (snapshot.running) Color(0xFFFFF6F0) else Color(0xFF2A120E)
     Column(
         modifier = Modifier.fillMaxSize().background(bg).padding(horizontal = 22.dp, vertical = 28.dp),
@@ -132,7 +134,7 @@ private fun TomatoApp(onPickSound: () -> Unit, onExactAlarms: () -> Unit) {
     ) {
         Text("Tomato", color = ink, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Text(
-            if (snapshot.running) "Running in the background" else "Drag the ring · 5 to 55 minutes",
+            if (snapshot.running) "Dial winding back to zero" else "Twist the apple · 5 to 55 minutes",
             color = ink.copy(alpha = 0.7f),
             fontSize = 14.sp,
         )
@@ -218,9 +220,10 @@ private fun TomatoDial(
     running: Boolean,
     onSelect: (Int) -> Unit,
 ) {
-    val context = LocalContext.current
     var lastSlot by remember { mutableIntStateOf(minutes) }
-    val progress = if (totalMillis <= 0L) 0f else (remainingMillis.toFloat() / totalMillis).coerceIn(0f, 1f)
+    val shown = if (running && totalMillis > 0L) {
+        (remainingMillis / 60_000f).coerceIn(0f, 55f)
+    } else minutes.toFloat()
     val pulse by rememberInfiniteTransition(label = "tick").animateFloat(
         initialValue = 0.45f,
         targetValue = 1f,
@@ -229,117 +232,136 @@ private fun TomatoDial(
     )
     Canvas(
         modifier = Modifier
-            .size(320.dp)
+            .size(340.dp)
+            .pointerInput(running, minutes) {
+                if (running) return@pointerInput
+                detectHorizontalDragGestures { _, drag ->
+                    val selected = minutes.coerceIn(5, 55)
+                    val next = (selected - (drag / 16f).toInt() * 5).coerceIn(5, 55)
+                    val snapped = PomodoroEngine.steps.minBy { kotlin.math.abs(it - next) }
+                    if (snapped != lastSlot) {
+                        lastSlot = snapped
+                        onSelect(snapped)
+                    }
+                }
+            }
             .pointerInput(running) {
                 if (running) return@pointerInput
                 detectTapGestures { pos ->
-                    val selected = minutesFor(pos.x, pos.y, size.width.toFloat(), size.height.toFloat())
+                    val selected = minutesFor(pos.x, pos.y, size.width.toFloat(), size.height.toFloat(), minutes)
                     lastSlot = selected
                     onSelect(selected)
                 }
-            }
-            .pointerInput(running) {
-                if (running) return@pointerInput
-                detectDragGestures { change, _ ->
-                    val selected = minutesFor(change.position.x, change.position.y, size.width.toFloat(), size.height.toFloat())
-                    if (selected != lastSlot) {
-                        lastSlot = selected
-                        onSelect(selected)
-                    }
-                }
             },
     ) {
-        val c = Offset(size.width / 2f, size.height / 2f + 8f)
-        val tomatoR = size.minDimension * 0.34f
-        drawCircle(Color(0x33000000), tomatoR * 0.92f, c + Offset(0f, tomatoR * 0.28f))
-        drawCircle(
-            brush = Brush.radialGradient(
-                listOf(Color(0xFFFF6B5A), Color(0xFFE23B2F), Color(0xFFB71C1C)),
-                center = c + Offset(-tomatoR * 0.25f, -tomatoR * 0.3f),
-                radius = tomatoR * 1.4f,
-            ),
-            radius = tomatoR,
-            center = c,
+        val c = Offset(size.width / 2f, size.height * 0.56f)
+        val rx = size.minDimension * 0.42f
+        val ry = size.minDimension * 0.40f
+        val seam = c.y - ry * 0.08f
+
+        drawOval(
+            Color(0x22000000),
+            Offset(c.x - rx * 0.78f, c.y + ry * 0.78f),
+            Size(rx * 1.56f, ry * 0.22f),
         )
-        drawCircle(Color(0x55FFFFFF), tomatoR * 0.22f, c + Offset(-tomatoR * 0.28f, -tomatoR * 0.32f))
-        val lit = (progress * 6f).toInt().coerceIn(0, 6)
-        repeat(6) { i ->
-            rotate(i * 30f - 10f, c) {
+        drawOval(
+            brush = Brush.radialGradient(
+                listOf(Color(0xFFE53935), Color(0xFFD32F2F), Color(0xFFB71C1C), Color(0xFF8E1515)),
+                center = c + Offset(-rx * 0.15f, ry * 0.15f),
+                radius = rx * 1.35f,
+            ),
+            topLeft = Offset(c.x - rx, seam - ry * 0.08f),
+            size = Size(rx * 2f, ry * 1.55f),
+        )
+        drawOval(
+            Color(0x33FFFFFF),
+            Offset(c.x - rx * 0.42f, c.y + ry * 0.42f),
+            Size(rx * 0.36f, ry * 0.12f),
+        )
+
+        drawIntoCanvas { canvas ->
+            val paint = Paint().apply {
+                isAntiAlias = true
+                color = android.graphics.Color.WHITE
+                textAlign = Paint.Align.CENTER
+                typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+            }
+            val marks = (0..55 step 5)
+            marks.forEach { mark ->
+                val delta = ((mark - shown) % 60f + 60f) % 60f
+                val signed = if (delta > 30f) delta - 60f else delta
+                val angle = Math.toRadians((-signed * 6f).toDouble())
+                val front = cos(angle).toFloat()
+                if (front < 0.08f) return@forEach
+                val x = c.x + (sin(angle) * rx * 0.78f).toFloat()
+                val y = seam + ry * 0.16f + (1f - front) * ry * 0.05f
+                val near = kotlin.math.abs(signed) < 2.4f
+                val tick = if (mark % 10 == 0) 18f else 11f
                 drawLine(
-                    color = if (i < lit || !running) Color(0x33FFFFFF) else Color(0x22FFFFFF),
-                    start = c + Offset(0f, -tomatoR * 0.15f),
-                    end = c + Offset(0f, -tomatoR * 0.92f),
-                    strokeWidth = 3f,
+                    color = if (near && running) Color(0xFFFFF4C2).copy(alpha = pulse) else Color.White.copy(alpha = 0.45f + 0.55f * front),
+                    start = Offset(x, y - tick),
+                    end = Offset(x, y),
+                    strokeWidth = if (near) 4.2f else 2.4f,
+                    cap = StrokeCap.Round,
                 )
+                if (front > 0.28f) {
+                    paint.textSize = if (near) 34f else 28f
+                    paint.alpha = (255 * front).toInt().coerceIn(90, 255)
+                    canvas.nativeCanvas.drawText(mark.toString(), x, y + 32f, paint)
+                }
             }
         }
-        val stem = Path().apply {
-            moveTo(c.x, c.y - tomatoR * 0.72f)
-            lineTo(c.x - 8f, c.y - tomatoR * 1.18f)
-            lineTo(c.x + 8f, c.y - tomatoR * 1.18f)
+
+        drawOval(
+            brush = Brush.radialGradient(
+                listOf(Color(0xFFFF6E66), Color(0xFFE53935), Color(0xFFC62828), Color(0xFFB71C1C)),
+                center = Offset(c.x - rx * 0.22f, seam - ry * 0.62f),
+                radius = rx * 1.25f,
+            ),
+            topLeft = Offset(c.x - rx * 0.98f, seam - ry * 1.18f),
+            size = Size(rx * 1.96f, ry * 1.28f),
+        )
+        drawOval(
+            Color(0xFFD32F2F),
+            Offset(c.x - rx * 0.92f, seam - ry * 0.22f),
+            Size(rx * 0.28f, ry * 0.18f),
+        )
+        drawOval(
+            brush = Brush.radialGradient(
+                listOf(Color(0xFFFF8A80), Color(0x00FF8A80)),
+                center = Offset(c.x - rx * 0.28f, seam - ry * 0.78f),
+                radius = rx * 0.45f,
+            ),
+            topLeft = Offset(c.x - rx * 0.55f, seam - ry * 1.02f),
+            size = Size(rx * 0.7f, ry * 0.36f),
+        )
+        drawLine(
+            Color(0x66FFFFFF),
+            Offset(c.x - rx * 0.9f, seam),
+            Offset(c.x + rx * 0.9f, seam),
+            strokeWidth = 2.5f,
+        )
+        val pointer = Path().apply {
+            moveTo(c.x, seam + 10f)
+            lineTo(c.x - 11f, seam - 16f)
+            lineTo(c.x + 11f, seam - 16f)
             close()
         }
-        drawPath(stem, Color(0xFF5D4037))
-        val leaf = Path().apply {
-            moveTo(c.x, c.y - tomatoR * 0.95f)
-            quadraticTo(c.x - tomatoR * 0.7f, c.y - tomatoR * 1.15f, c.x - tomatoR * 0.15f, c.y - tomatoR * 0.7f)
-            quadraticTo(c.x + tomatoR * 0.7f, c.y - tomatoR * 1.2f, c.x, c.y - tomatoR * 0.95f)
+        drawPath(pointer, if (running) Color.White.copy(alpha = 0.55f + 0.45f * pulse) else Color.White)
+        val stem = Path().apply {
+            moveTo(c.x - 4f, seam - ry * 1.05f)
+            quadraticTo(c.x + 2f, seam - ry * 1.55f, c.x + 8f, seam - ry * 1.62f)
+            quadraticTo(c.x + 4f, seam - ry * 1.42f, c.x + 6f, seam - ry * 1.02f)
+            close()
         }
-        drawPath(leaf, Color(0xFF2E7D32))
-        val ring = tomatoR * 1.38f
-        drawArc(
-            color = Color(0x33E23B2F),
-            startAngle = -90f,
-            sweepAngle = 360f,
-            useCenter = false,
-            topLeft = Offset(c.x - ring, c.y - ring),
-            size = Size(ring * 2, ring * 2),
-            style = Stroke(8f, cap = StrokeCap.Round),
-        )
-        drawArc(
-            color = if (running) Color(0xFFFF5252) else Color(0xFFE23B2F),
-            startAngle = -90f,
-            sweepAngle = 360f * progress,
-            useCenter = false,
-            topLeft = Offset(c.x - ring, c.y - ring),
-            size = Size(ring * 2, ring * 2),
-            style = Stroke(10f, cap = StrokeCap.Round),
-        )
-        PomodoroEngine.steps.forEachIndexed { index, step ->
-            val angle = Math.toRadians((-90.0 + index * (360.0 / 11.0)))
-            val tickLen = if (step == minutes) 18f else 10f
-            val outer = Offset(c.x + (ring * cos(angle)).toFloat(), c.y + (ring * sin(angle)).toFloat())
-            val inner = Offset(
-                c.x + ((ring - tickLen) * cos(angle)).toFloat(),
-                c.y + ((ring - tickLen) * sin(angle)).toFloat(),
-            )
-            val active = step == minutes
-            val elapsedIndex = ((1f - progress) * (PomodoroEngine.steps.size - 1)).toInt()
-            val sweeping = running && index == elapsedIndex
-            drawLine(
-                color = when {
-                    sweeping -> Color(0xFFFFEB3B).copy(alpha = pulse)
-                    active -> Color(0xFF2A120E)
-                    running && index < elapsedIndex -> Color(0x55FFFFFF)
-                    else -> Color(0xFF8D4038)
-                },
-                start = inner,
-                end = outer,
-                strokeWidth = if (active || sweeping) 7f else 3f,
-                cap = StrokeCap.Round,
-            )
-            if (sweeping) {
-                drawCircle(Color(0xFFFFEB3B).copy(alpha = pulse), 7f + 4f * pulse, outer)
-            }
-        }
+        drawPath(stem, Color(0xFF1B1B1B))
+        drawOval(Color(0xFF2A2A2A), Offset(c.x - 7f, seam - ry * 1.12f), Size(16f, 10f))
     }
 }
 
-private fun minutesFor(x: Float, y: Float, w: Float, h: Float): Int {
-    val cx = w / 2f
-    val cy = h / 2f + 8f
-    var deg = Math.toDegrees(atan2((y - cy).toDouble(), (x - cx).toDouble())) + 90.0
-    if (deg < 0) deg += 360.0
-    val index = ((deg / (360.0 / 11.0)) + 0.5).toInt() % 11
-    return PomodoroEngine.steps[index]
+private fun minutesFor(x: Float, y: Float, w: Float, h: Float, current: Int): Int {
+    val dx = x - w / 2f
+    val step = (dx / (w * 0.08f)).toInt()
+    val next = (current - step * 5).coerceIn(5, 55)
+    return PomodoroEngine.steps.minBy { kotlin.math.abs(it - next) }
 }

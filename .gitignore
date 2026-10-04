@@ -12,3 +12,4 @@ app/build/
 *.apk
 
 !web/tomato-pomodoro.apk
+local-maven/
