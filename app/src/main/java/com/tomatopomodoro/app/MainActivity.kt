@@ -139,7 +139,7 @@ private fun TomatoApp(onPickSound: () -> Unit, onExactAlarms: () -> Unit) {
         modifier = Modifier.fillMaxSize().background(bg).padding(horizontal = 22.dp, vertical = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Tomato 1.8", color = ink, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Text("Tomato 1.9", color = ink, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Text(
             if (snapshot.running) "Lid winding back" else "Twist the dial · 0 to 55",
             color = ink.copy(alpha = 0.7f),
@@ -238,7 +238,7 @@ private fun TomatoDial(
         animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
         label = "pulse",
     )
-    Box(
+    Canvas(
         modifier = Modifier
             .size(320.dp)
             .pointerInput(running) {
@@ -252,51 +252,89 @@ private fun TomatoDial(
                     }
                 }
             },
-        contentAlignment = Alignment.Center,
     ) {
-        Image(
-            painter = painterResource(R.drawable.apple_timer),
-            contentDescription = "Tomato timer",
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit,
-        )
-        Canvas(Modifier.fillMaxSize()) {
-            val cx = size.width / 2f
-            val seam = size.height * 0.455f
-            val rx = size.width * 0.34f
-            drawOval(
-                Color(0xFFE53935),
-                Offset(cx - rx, seam - 6f),
-                Size(rx * 2f, size.height * 0.16f),
+        val cx = size.width / 2f
+        val cy = size.height * 0.54f
+        val r = size.minDimension * 0.40f
+        val seam = cy - r * 0.04f
+        val gap = 3f
+        drawOval(Color(0x22000000), Offset(cx - r * 0.7f, cy + r * 0.72f), Size(r * 1.4f, r * 0.18f))
+        clipRect(top = seam, bottom = size.height) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    listOf(Color(0xFFEF3B32), Color(0xFFD32F2F), Color(0xFFB71C1C)),
+                    center = Offset(cx - r * 0.15f, cy),
+                    radius = r * 1.2f,
+                ),
+                radius = r,
+                center = Offset(cx, cy),
             )
-            drawIntoCanvas { canvas ->
-                val paint = Paint().apply {
-                    isAntiAlias = true
-                    color = android.graphics.Color.WHITE
-                    textAlign = Paint.Align.CENTER
-                    typeface = android.graphics.Typeface.create(android.graphics.Typeface.SANS_SERIF, android.graphics.Typeface.BOLD)
-                }
-                (0..55 step 5).forEach { mark ->
-                    val delta = ((mark - turn) % 60f + 60f) % 60f
-                    val signed = if (delta > 30f) delta - 60f else delta
-                    val angle = Math.toRadians((-signed * 6f).toDouble())
-                    val front = cos(angle).toFloat()
-                    if (front < 0.35f) return@forEach
-                    val x = cx + (sin(angle) * rx * 0.82f).toFloat()
-                    val near = kotlin.math.abs(signed) < 2.4f
-                    drawLine(
-                        Color.White.copy(alpha = if (near && running) pulse else 0.9f),
-                        Offset(x, seam + 4f),
-                        Offset(x, seam + 18f),
-                        strokeWidth = if (near) 3.2f else 2f,
-                        cap = StrokeCap.Round,
-                    )
-                    paint.textSize = if (near) 28f else 22f
-                    paint.alpha = 245
-                    canvas.nativeCanvas.drawText(mark.toString(), x, seam + 42f, paint)
-                }
+        }
+        drawIntoCanvas { canvas ->
+            val paint = Paint().apply {
+                isAntiAlias = true
+                color = android.graphics.Color.WHITE
+                textAlign = Paint.Align.CENTER
+                typeface = android.graphics.Typeface.create(android.graphics.Typeface.SANS_SERIF, android.graphics.Typeface.BOLD)
+            }
+            (0..55 step 5).forEach { mark ->
+                val delta = ((mark - turn) % 60f + 60f) % 60f
+                val signed = if (delta > 30f) delta - 60f else delta
+                val angle = Math.toRadians((-signed * 6f).toDouble())
+                val front = cos(angle).toFloat()
+                if (front < 0.35f) return@forEach
+                val x = cx + (sin(angle) * r * 0.72f).toFloat()
+                val near = kotlin.math.abs(signed) < 2.4f
+                drawLine(
+                    Color.White.copy(alpha = if (near && running) pulse else 0.92f),
+                    Offset(x, seam + 10f),
+                    Offset(x, seam + 24f),
+                    strokeWidth = if (near) 3.2f else 2f,
+                    cap = StrokeCap.Round,
+                )
+                paint.textSize = if (near) 28f else 22f
+                paint.alpha = 245
+                canvas.nativeCanvas.drawText(mark.toString(), x, seam + 48f, paint)
             }
         }
+        val pointer = Path().apply {
+            moveTo(cx, seam + 6f)
+            lineTo(cx - 9f, seam + 22f)
+            lineTo(cx + 9f, seam + 22f)
+            close()
+        }
+        drawPath(pointer, if (running) Color.White.copy(alpha = 0.6f + 0.4f * pulse) else Color.White)
+        clipRect(top = 0f, bottom = seam - gap) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    listOf(Color(0xFFFF6A60), Color(0xFFE53935), Color(0xFFC62828)),
+                    center = Offset(cx - r * 0.2f, cy - r * 0.25f),
+                    radius = r * 1.15f,
+                ),
+                radius = r,
+                center = Offset(cx, cy),
+            )
+        }
+        drawOval(
+            brush = Brush.radialGradient(listOf(Color(0xE6FFFFFF), Color(0x00FFFFFF)), center = Offset(cx - r * 0.28f, cy - r * 0.55f), radius = r * 0.22f),
+            topLeft = Offset(cx - r * 0.48f, cy - r * 0.72f),
+            size = Size(r * 0.36f, r * 0.22f),
+        )
+        val leafL = Path().apply {
+            moveTo(cx, cy - r * 0.78f)
+            lineTo(cx - r * 0.22f, cy - r * 0.98f)
+            lineTo(cx - r * 0.06f, cy - r * 0.74f)
+            close()
+        }
+        val leafR = Path().apply {
+            moveTo(cx, cy - r * 0.78f)
+            lineTo(cx + r * 0.24f, cy - r * 0.99f)
+            lineTo(cx + r * 0.05f, cy - r * 0.74f)
+            close()
+        }
+        drawPath(leafL, Color(0xFF2E7D32))
+        drawPath(leafR, Color(0xFF1B5E20))
+        drawOval(Color(0xFF1B5E20), Offset(cx - 6f, cy - r * 1.02f), Size(12f, r * 0.16f))
     }
 }
 
