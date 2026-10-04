@@ -22,7 +22,7 @@ data class PomodoroState(
 )
 
 object PomodoroEngine {
-    val steps = (1..11).map { it * 5 }
+    val steps = (0..11).map { it * 5 }
 
     private val _state = MutableStateFlow(PomodoroState())
     val state: StateFlow<PomodoroState> = _state.asStateFlow()
@@ -31,7 +31,7 @@ object PomodoroEngine {
 
     fun load(context: Context) {
         val p = prefs(context)
-        val minutes = p.getInt(KEY_MINUTES, 25).coerceIn(5, 55)
+        val minutes = p.getInt(KEY_MINUTES, 25).coerceIn(0, 55)
         val running = p.getBoolean(KEY_RUNNING, false)
         val end = p.getLong(KEY_END, 0L)
         val savedRemaining = p.getLong(KEY_REMAINING, minutes * 60_000L)
@@ -81,14 +81,14 @@ object PomodoroEngine {
             WidgetUpdater.refresh(context)
             context.startService(Intent(context, TimerService::class.java))
         } else {
-            val next = (current.durationMinutes + deltaMinutes).coerceIn(5, 55)
+            val next = (current.durationMinutes + deltaMinutes).coerceIn(0, 55)
             val snapped = steps.minBy { kotlin.math.abs(it - next) }
             selectMinutes(context, snapped, feedback = true)
         }
     }
 
     fun toggle(context: Context) {
-        if (_state.value.running) pause(context) else start(context)
+        if (_state.value.running) pause(context) else if (_state.value.durationMinutes > 0) start(context)
     }
 
     fun start(context: Context) {
