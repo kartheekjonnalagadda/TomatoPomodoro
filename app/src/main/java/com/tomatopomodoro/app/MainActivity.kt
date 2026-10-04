@@ -135,7 +135,7 @@ private fun TomatoApp(onPickSound: () -> Unit, onExactAlarms: () -> Unit) {
         modifier = Modifier.fillMaxSize().background(bg).padding(horizontal = 22.dp, vertical = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Tomato 1.3", color = ink, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Text("Tomato 1.4", color = ink, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Text(
             if (snapshot.running) "Lid winding back" else "Twist the lid · 0 to 55",
             color = ink.copy(alpha = 0.7f),
@@ -237,45 +237,44 @@ private fun TomatoDial(
     Canvas(
         modifier = Modifier
             .size(320.dp)
-            .pointerInput(running, minutes) {
+            .pointerInput(running) {
                 if (running) return@pointerInput
-                detectHorizontalDragGestures { _, drag ->
-                    val selected = minutes.coerceIn(0, 55)
-                    val next = (selected - (drag / 14f).toInt() * 5).coerceIn(0, 55)
+                detectDragGestures { change, drag ->
+                    change.consume()
+                    val center = Offset(size.width / 2f, size.height * 0.48f)
+                    val prev = change.position - drag
+                    val a1 = atan2(prev.y - center.y, prev.x - center.x)
+                    val a2 = atan2(change.position.y - center.y, change.position.x - center.x)
+                    var delta = Math.toDegrees((a2 - a1).toDouble()).toFloat()
+                    if (delta > 180f) delta -= 360f
+                    if (delta < -180f) delta += 360f
+                    val next = (minutes - delta / 6f).toInt().coerceIn(0, 55)
                     val snapped = PomodoroEngine.steps.minBy { kotlin.math.abs(it - next) }
                     if (snapped != lastSlot) {
                         lastSlot = snapped
                         onSelect(snapped)
                     }
                 }
-            }
-            .pointerInput(running) {
-                if (running) return@pointerInput
-                detectTapGestures { pos ->
-                    val selected = minutesFor(pos.x, pos.y, size.width.toFloat(), size.height.toFloat(), minutes)
-                    lastSlot = selected
-                    onSelect(selected)
-                }
             },
     ) {
         val cx = size.width / 2f
-        val baseTop = size.height * 0.50f
+        val baseTop = size.height * 0.52f
         val gap = 3.dp.toPx()
         val rx = size.minDimension * 0.40f
         val ry = size.minDimension * 0.30f
-        drawOval(Color(0x28000000), Offset(cx - rx * 0.72f, baseTop + ry * 1.05f), Size(rx * 1.44f, ry * 0.2f))
+        drawOval(Color(0x30000000), Offset(cx - rx * 0.7f, baseTop + ry * 1.08f), Size(rx * 1.4f, ry * 0.18f))
         val base = Path().apply {
-            moveTo(cx - rx, baseTop)
-            cubicTo(cx - rx, baseTop + ry * 0.7f, cx - rx * 0.55f, baseTop + ry * 1.12f, cx, baseTop + ry * 1.12f)
-            cubicTo(cx + rx * 0.55f, baseTop + ry * 1.12f, cx + rx, baseTop + ry * 0.7f, cx + rx, baseTop)
+            moveTo(cx - rx, baseTop + 2f)
+            cubicTo(cx - rx * 1.02f, baseTop + ry * 0.7f, cx - rx * 0.55f, baseTop + ry * 1.16f, cx, baseTop + ry * 1.16f)
+            cubicTo(cx + rx * 0.55f, baseTop + ry * 1.16f, cx + rx * 1.02f, baseTop + ry * 0.7f, cx + rx, baseTop + 2f)
             close()
         }
         drawPath(
             base,
             brush = Brush.radialGradient(
-                listOf(Color(0xFFEF3A32), Color(0xFFD12520), Color(0xFF9E1814)),
-                center = Offset(cx - rx * 0.1f, baseTop + ry * 0.35f),
-                radius = rx * 1.3f,
+                listOf(Color(0xFFE23B32), Color(0xFFC62828), Color(0xFF8E1612)),
+                center = Offset(cx - rx * 0.08f, baseTop + ry * 0.4f),
+                radius = rx * 1.35f,
             ),
         )
         drawIntoCanvas { canvas ->
@@ -290,65 +289,74 @@ private fun TomatoDial(
                 val signed = if (delta > 30f) delta - 60f else delta
                 val angle = Math.toRadians((-signed * 6f).toDouble())
                 val front = cos(angle).toFloat()
-                if (front < 0.3f) return@forEach
-                val x = cx + (sin(angle) * rx * 0.58f).toFloat()
-                val near = kotlin.math.abs(signed) < 2.2f
+                if (front < 0.32f) return@forEach
+                val x = cx + (sin(angle) * rx * 0.56f).toFloat()
+                val near = kotlin.math.abs(signed) < 2.4f
                 drawLine(
-                    Color.White.copy(alpha = if (near && running) pulse else 0.65f + 0.35f * front),
-                    Offset(x, baseTop + 8f),
-                    Offset(x, baseTop + 20f),
-                    strokeWidth = if (near) 3.4f else 2f,
+                    Color.White.copy(alpha = if (near && running) pulse else 0.7f + 0.3f * front),
+                    Offset(x, baseTop + 12f),
+                    Offset(x, baseTop + 26f),
+                    strokeWidth = if (near) 3.6f else 2.2f,
                     cap = StrokeCap.Round,
                 )
-                paint.textSize = if (near) 30f else 24f
-                paint.alpha = (255 * front).toInt().coerceIn(150, 255)
-                canvas.nativeCanvas.drawText(mark.toString(), x, baseTop + 46f, paint)
+                paint.textSize = if (near) 32f else 24f
+                paint.alpha = (255 * front).toInt().coerceIn(160, 255)
+                canvas.nativeCanvas.drawText(mark.toString(), x, baseTop + 52f, paint)
             }
         }
         val lidTop = baseTop - gap
-        withTransform({ rotate(degrees = spin, pivot = Offset(cx, lidTop - ry * 0.4f)) }) {
+        val pivot = Offset(cx, lidTop - ry * 0.35f)
+        withTransform({ rotate(degrees = spin, pivot = pivot) }) {
             val lid = Path().apply {
-                moveTo(cx - rx * 0.98f, lidTop)
-                cubicTo(cx - rx, lidTop - ry * 0.72f, cx - rx * 0.4f, lidTop - ry * 0.92f, cx, lidTop - ry * 0.88f)
-                cubicTo(cx + rx * 0.4f, lidTop - ry * 0.92f, cx + rx, lidTop - ry * 0.72f, cx + rx * 0.98f, lidTop)
+                moveTo(cx - rx * 0.96f, lidTop)
+                cubicTo(cx - rx * 1.05f, lidTop - ry * 0.35f, cx - rx * 0.72f, lidTop - ry * 0.7f, cx - rx * 0.28f, lidTop - ry * 0.82f)
+                cubicTo(cx - rx * 0.08f, lidTop - ry * 0.98f, cx + rx * 0.18f, lidTop - ry * 0.9f, cx + rx * 0.42f, lidTop - ry * 0.7f)
+                cubicTo(cx + rx * 0.78f, lidTop - ry * 0.48f, cx + rx * 1.02f, lidTop - ry * 0.18f, cx + rx * 0.96f, lidTop)
                 close()
             }
             drawPath(
                 lid,
                 brush = Brush.radialGradient(
-                    listOf(Color(0xFFFF6A62), Color(0xFFE53935), Color(0xFFC62828)),
-                    center = Offset(cx - rx * 0.25f, lidTop - ry * 0.5f),
-                    radius = rx * 1.1f,
+                    listOf(Color(0xFFFF6E64), Color(0xFFE53935), Color(0xFFB71C1C)),
+                    center = Offset(cx - rx * 0.22f, lidTop - ry * 0.5f),
+                    radius = rx * 1.15f,
                 ),
             )
             drawOval(
-                brush = Brush.radialGradient(listOf(Color(0xBBFFFFFF), Color(0x00FFFFFF)), center = Offset(cx - rx * 0.28f, lidTop - ry * 0.55f), radius = rx * 0.26f),
-                topLeft = Offset(cx - rx * 0.48f, lidTop - ry * 0.72f),
-                size = Size(rx * 0.4f, ry * 0.26f),
+                brush = Brush.radialGradient(listOf(Color(0xD0FFFFFF), Color(0x00FFFFFF)), center = Offset(cx - rx * 0.3f, lidTop - ry * 0.55f), radius = rx * 0.28f),
+                topLeft = Offset(cx - rx * 0.5f, lidTop - ry * 0.74f),
+                size = Size(rx * 0.42f, ry * 0.28f),
             )
-            val pointer = Path().apply {
-                moveTo(cx, lidTop + 2f)
-                lineTo(cx - 9f, lidTop - 14f)
-                lineTo(cx + 9f, lidTop - 14f)
-                close()
-            }
-            drawPath(pointer, if (running) Color.White.copy(alpha = 0.55f + 0.45f * pulse) else Color.White)
-            drawOval(Color(0xFF3E2A22), Offset(cx - 11f, lidTop - ry * 0.92f), Size(22f, 10f))
+            drawOval(Color(0xFF4E342E), Offset(cx - 14f, lidTop - ry * 0.9f), Size(28f, 12f))
             val stem = Path().apply {
-                moveTo(cx - 5f, lidTop - ry * 0.82f)
-                cubicTo(cx - 8f, lidTop - ry * 1.25f, cx + 4f, lidTop - ry * 1.45f, cx + 10f, lidTop - ry * 1.35f)
-                cubicTo(cx + 6f, lidTop - ry * 1.22f, cx + 8f, lidTop - ry * 1.05f, cx + 4f, lidTop - ry * 0.8f)
+                moveTo(cx - 7f, lidTop - ry * 0.78f)
+                cubicTo(cx - 10f, lidTop - ry * 1.35f, cx + 2f, lidTop - ry * 1.7f, cx + 16f, lidTop - ry * 1.55f)
+                cubicTo(cx + 8f, lidTop - ry * 1.4f, cx + 10f, lidTop - ry * 1.1f, cx + 6f, lidTop - ry * 0.76f)
                 close()
             }
-            drawPath(stem, Color(0xFF2A211C))
+            drawPath(stem, Color(0xFF3E2723))
             val leaf = Path().apply {
-                moveTo(cx + 2f, lidTop - ry * 0.9f)
-                quadraticTo(cx + 28f, lidTop - ry * 1.05f, cx + 22f, lidTop - ry * 0.72f)
-                quadraticTo(cx + 12f, lidTop - ry * 0.8f, cx + 2f, lidTop - ry * 0.86f)
+                moveTo(cx + 4f, lidTop - ry * 0.95f)
+                quadraticTo(cx + 46f, lidTop - ry * 1.15f, cx + 36f, lidTop - ry * 0.7f)
+                quadraticTo(cx + 18f, lidTop - ry * 0.82f, cx + 4f, lidTop - ry * 0.9f)
                 close()
             }
-            drawPath(leaf, Color(0xFF3F6B32))
+            drawPath(leaf, Color(0xFF4C7C3A))
+            val leaf2 = Path().apply {
+                moveTo(cx - 2f, lidTop - ry * 0.92f)
+                quadraticTo(cx - 34f, lidTop - ry * 1.05f, cx - 22f, lidTop - ry * 0.68f)
+                quadraticTo(cx - 10f, lidTop - ry * 0.78f, cx - 2f, lidTop - ry * 0.88f)
+                close()
+            }
+            drawPath(leaf2, Color(0xFF3D6B32))
         }
+        val pointer = Path().apply {
+            moveTo(cx, lidTop + 1f)
+            lineTo(cx - 10f, lidTop - 16f)
+            lineTo(cx + 10f, lidTop - 16f)
+            close()
+        }
+        drawPath(pointer, if (running) Color.White.copy(alpha = 0.6f + 0.4f * pulse) else Color.White)
     }
 }
 
