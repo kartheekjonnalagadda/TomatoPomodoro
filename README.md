@@ -27,5 +27,7 @@ Package: `com.tomatopomodoro.app`
 
 The web project is in `web/`. Open `web/index.html` and tap **Download APK**. The button saves `web/tomato-pomodoro.apk`.
 
-Published page: https://kartheekjonnalagadda.github.io/TomatoPomodoro/
+Published page, after Pages is enabled: https://kartheekjonnalagadda.github.io/TomatoPomodoro/
+
+Direct APK: https://github.com/kartheekjonnalagadda/TomatoPomodoro/raw/main/web/tomato-pomodoro.apk
 
